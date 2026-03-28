@@ -1,0 +1,5 @@
+{
+  "name": "Law Firm Billing Dashboard",
+  "description": "A comprehensive legal billing dashboard for managing time entries, auto-assigning matters, and generating narratives using AI.",
+  "requestFramePermissions": []
+}
