@@ -6,13 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "start": "node server.js",
     "preview": "vite preview"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "dependencies": {
     "react": "^19.2.1",
     "lucide-react": "^0.556.0",
     "react-dom": "^19.2.1",
-    "@google/genai": "^1.31.0"
+    "@google/genai": "^1.31.0",
+    "express": "^4.21.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
