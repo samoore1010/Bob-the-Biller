@@ -1,0 +1,66 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Activity {
+  id             Int      @id @default(autoincrement())
+  type           String   // mail-in, mail-out, event
+  date           String
+  time           String   @default("12:00 PM")
+  subject        String
+  preview        String   @default("")
+  correspondent  String   @default("Unknown")
+  matterId       String   @default("Unassigned")
+  user           String   @default("Steven Moore")
+  duration       String   @default("0.10")
+  rate           Float    @default(350)
+  itemLink       String?
+  gmailMessageId String?  @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model BilledEntry {
+  id            Int      @id @default(autoincrement())
+  date          String
+  description   String
+  matterId      String
+  qty           String
+  value         String
+  itemCount     Int
+  user          String   @default("Steven Moore")
+  originalItems Json     // Stored as JSON array of activity snapshots
+  createdAt     DateTime @default(now())
+}
+
+model SmartRule {
+  id       Int    @id @default(autoincrement())
+  matterId String
+  triggers Json   // string[]
+}
+
+model CastMapping {
+  id       Int    @id @default(autoincrement())
+  matterId String
+  name     String
+  role     String @default("Client")
+}
+
+model Settings {
+  id              Int    @id @default(1)
+  inboundRate     Float  @default(0.1)
+  outboundRate    Float  @default(0.2)
+  eventRate       Float  @default(0.5)
+  hourlyRate      Float  @default(350)
+  narrativePrompt String @default("")
+  geminiApiKey    String @default("")
+  // Gmail OAuth tokens stored as JSON
+  gmailTokens     Json?
+  gmailEmail      String?
+  gmailSyncedAt   DateTime?
+}

@@ -51,6 +51,19 @@ import {
 // Environment API Key injection point
 const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) ? process.env.API_KEY : "";
 
+// ─── API helper ──────────────────────────────────────────────────
+async function api(path: string, opts: RequestInit = {}) {
+  const res = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...opts.headers as any },
+    ...opts,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
 export function App() {
   // --- MAIN STATE ---
   const [selectedMatterId, setSelectedMatterId] = useState('ALL');
@@ -71,34 +84,10 @@ export function App() {
 
   // --- MAPPING & RULES STATE ---
   const [contactMappings, setContactMappings] = useState<Record<string, string>>({}); // Legacy support
-  const [smartRules, setSmartRules] = useState<{ id: number; matterId: string; triggers: string[] }[]>([
-      { id: 1, matterId: 'HERRERA, JESSICA', triggers: ['jessicah26@gmail.com', 'Herrera', '71534'] },
-      { id: 2, matterId: 'Admin', triggers: ['lexisnexis', 'bar association', 'invoice', 'subscription', 'Microsoft on behalf of your organization', 'Daily Journal Editor', 'ACG Los Angeles', 'Michael Prestia', 'Allison Hoffenberg'] },
-      { id: 3, matterId: 'AFE', triggers: ['AFE', 'Fabric', 'Douglas Coulter', 'Aburto, Armando', 'Project Turf', 'CIS', 'Nick Berquist', 'Chase McClung', 'Page, Michael'] },
-      { id: 4, matterId: 'CONSTANCIO', triggers: ['Rudy', 'Constancio'] },
-      { id: 5, matterId: 'MAXWELL', triggers: ['Maxwell', 'Dee Dodson', 'William Maxwell', 'CRETE'] },
-      { id: 6, matterId: 'D&L', triggers: ['Jawad, Rama M.', 'D&L', 'D & L'] },
-      { id: 7, matterId: 'NATALEE', triggers: ['Michael G. Ebiner', 'PUENTE'] },
-      { id: 8, matterId: 'CASE', triggers: ['Michael Case Jr', 'Byerly', 'Byerlys'] },
-      { id: 9, matterId: 'DIAZ', triggers: ['Diaz'] },
-      { id: 10, matterId: 'HUBBLE', triggers: ['Char Davis Hubble'] },
-      { id: 11, matterId: 'CAL BORING', triggers: ['Gregory W. Brittain', 'NOBEL', 'CAL BORING', 'CALIFORNIA BORING'] },
-      { id: 12, matterId: 'ABELL', triggers: ['Victor Yu', 'ABELL'] },
-      { id: 13, matterId: 'HERNANDEZ', triggers: ['HERNANDEZ'] },
-      { id: 14, matterId: 'RYAN G.', triggers: ['RYAN G'] },
-      { id: 15, matterId: 'LIZARDI', triggers: ['Blake Slater', 'Lizardi', 'GARY BARLOW'] },
-      { id: 16, matterId: 'POCOROBA', triggers: ['Alberto Araujo', 'POCOROBA'] },
-      { id: 17, matterId: 'OCYSA', triggers: ['Sean Slattery'] },
-      { id: 18, matterId: 'GRAY', triggers: ['CINDY PARRISH', 'Zachary Congelliere'] },
-      { id: 19, matterId: 'LANE', triggers: ['45312-002', 'Lane', 'Brossia'] }
-  ]);
+  const [smartRules, setSmartRules] = useState<{ id: number; matterId: string; triggers: string[] }[]>([]);
 
   // --- CAST OF CHARACTERS STATE ---
-  const [castMappings, setCastMappings] = useState<{ id: number; matterId: string; name: string; role: string }[]>([
-      { id: 1, matterId: 'HERRERA, JESSICA', name: 'jessicah26@gmail.com', role: 'Client' },
-      { id: 2, matterId: 'HERRERA, JESSICA', name: 'Jessica Herrera', role: 'Client' },
-      { id: 3, matterId: 'HERRERA, JESSICA', name: 'Steven Moore', role: 'Internal' }
-  ]);
+  const [castMappings, setCastMappings] = useState<{ id: number; matterId: string; name: string; role: string }[]>([]);
   const [isCastModalOpen, setIsCastModalOpen] = useState(false);
   const [currentCastMatter, setCurrentCastMatter] = useState('');
   const [suggestedCast, setSuggestedCast] = useState<string[]>([]);
@@ -156,135 +145,13 @@ export function App() {
   });
   const [showApiKey, setShowApiKey] = useState(false);
 
+  // --- GMAIL STATE ---
+  const [gmailStatus, setGmailStatus] = useState<{ connected: boolean; email: string | null; lastSynced: string | null }>({ connected: false, email: null, lastSynced: null });
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
   // --- DATA STATE ---
-  const [activities, setActivities] = useState<any[]>([
-    {
-      id: 1,
-      type: 'mail-in',
-      date: '12/03/2025',
-      time: '04:58 PM',
-      subject: 'Re: 71534-25- HERRERA, JESSICA LITIGATION',
-      preview: 'Thank you! On Wed, Dec 3, 2025, 1:17PM Steven Moore wrote: Jessica, The attached was emailed...',
-      correspondent: 'jessicah26@gmail.com',
-      matterId: 'HERRERA, JESSICA',
-      user: 'Steven Moore',
-      duration: '0.10',
-      rate: 350,
-      itemLink: null
-    },
-    {
-      id: 2,
-      type: 'mail-out',
-      date: '12/03/2025',
-      time: '01:17 PM',
-      subject: 'RE: 71534-25- HERRERA... Response due',
-      preview: 'Jessica, The attached was emailed and mailed to Michelle today. Response from her is due by...',
-      correspondent: 'Jessica Herrera',
-      matterId: 'HERRERA, JESSICA',
-      user: 'Steven Moore',
-      duration: '0.20',
-      rate: 350,
-      itemLink: null
-    },
-    {
-      id: 3,
-      type: 'event',
-      date: '11/10/2025',
-      time: '03:45 PM',
-      subject: 'SAM to Call Jessica Herrera',
-      preview: 'Phone conference regarding status of Union property escrow closing; review credit union reconveyance...',
-      correspondent: 'All Attendees',
-      matterId: 'HERRERA, JESSICA',
-      user: 'Steven Moore',
-      duration: '0.50',
-      rate: 350,
-      itemLink: null
-    },
-    {
-      id: 101,
-      type: 'mail-out',
-      date: '11/11/2025',
-      time: '04:46 PM',
-      subject: 'CaseMap+ Access Issue',
-      preview: 'Hi Steve. I discussed with Lexis support on the website regarding access to CaseMap+. I was advised...',
-      correspondent: 'steve.niyati@lexisnexis.com',
-      matterId: 'Admin', 
-      user: 'Steven Moore',
-      duration: '0.20',
-      rate: 350,
-      itemLink: null
-    },
-    {
-      id: 102,
-      type: 'mail-out',
-      date: '11/11/2025',
-      time: '04:42 PM',
-      subject: 'FW: Via Koron Lease',
-      preview: 'Hi Char, Here is the fully executed sublease and landlord approval for your records. Payment instructions f...',
-      correspondent: 'Char Davis Hubble',
-      matterId: 'HUBBLE', 
-      user: 'Steven Moore',
-      duration: '0.20',
-      rate: 350,
-      itemLink: null
-    },
-    {
-      id: 103,
-      type: 'mail-out',
-      date: '11/11/2025',
-      time: '03:05 PM',
-      subject: 'Dan Gold Family Law',
-      preview: 'Hi Dorothy, Here is Dan\'s dedicated family law site. Your daughter can schedule a consultation...',
-      correspondent: 'Dorothy Costine',
-      matterId: 'Unassigned',
-      user: 'Steven Moore',
-      duration: '0.20',
-      rate: 350,
-      itemLink: null
-    },
-    {
-      id: 104,
-      type: 'mail-out',
-      date: '11/11/2025',
-      time: '04:09 PM',
-      subject: 'RE: John R. Byerlys, Inc. SPA',
-      preview: 'Yes. From: Brooke M. Pollard <bpollard@tldlaw.com> Sent: Tuesday, November 11, 2025 4:09 PM...',
-      correspondent: 'Brooke M. Pollard',
-      matterId: 'Unassigned', 
-      user: 'Steven Moore',
-      duration: '0.20',
-      rate: 350,
-      itemLink: null
-    },
-    {
-      id: 5,
-      type: 'mail-in',
-      date: '11/10/2025',
-      time: '10:05 AM',
-      subject: 'RE: In re: Conservatorship of Michaela Constancio',
-      preview: 'Thank you for checking Steven. Ok to skip. If we are able to get Diaz (Williams Trust) in to mediation...',
-      correspondent: 'jenniferlumsdaine@tldlaw.com',
-      matterId: 'Unassigned', 
-      user: 'Steven Moore',
-      duration: '0.10',
-      rate: 350,
-      itemLink: null
-    },
-    {
-        id: 108,
-        type: 'mail-in',
-        date: '11/10/2025',
-        time: '05:08 PM',
-        subject: 'Daily eBriefs - November 10, 2025',
-        preview: 'Monday, November 10, 2025 The following caselaw summaries are provided as a courtesy...',
-        correspondent: 'noreply@info.lacba.org',
-        matterId: 'Non-Client',
-        user: 'Steven Moore',
-        duration: '0.10',
-        rate: 350,
-        itemLink: null
-    }
-  ]);
+  const [activities, setActivities] = useState<any[]>([]);
   const [billedEntries, setBilledEntries] = useState<any[]>([]);
 
 
@@ -353,6 +220,118 @@ export function App() {
           return () => clearTimeout(timer);
       }
   }, [actionHistory]);
+
+  // --- LOAD DATA FROM API ON MOUNT ---
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [activitiesData, billedData, rulesData, castData, settingsData, gmailData] = await Promise.all([
+          api('/api/activities'),
+          api('/api/billed-entries'),
+          api('/api/smart-rules'),
+          api('/api/cast-mappings'),
+          api('/api/settings').catch(() => null),
+          api('/api/gmail/status').catch(() => ({ connected: false, email: null, lastSynced: null })),
+        ]);
+        setActivities(activitiesData);
+        setBilledEntries(billedData);
+        setSmartRules(rulesData.map((r: any) => ({ ...r, triggers: Array.isArray(r.triggers) ? r.triggers : [] })));
+        setCastMappings(castData);
+        if (settingsData) {
+          setSettings(prev => ({
+            ...prev,
+            inboundRate: settingsData.inboundRate ?? prev.inboundRate,
+            outboundRate: settingsData.outboundRate ?? prev.outboundRate,
+            eventRate: settingsData.eventRate ?? prev.eventRate,
+            hourlyRate: settingsData.hourlyRate ?? prev.hourlyRate,
+            narrativePrompt: settingsData.narrativePrompt || prev.narrativePrompt,
+            apiKey: settingsData.geminiApiKey || prev.apiKey,
+          }));
+        }
+        setGmailStatus(gmailData);
+      } catch (err) {
+        console.error('Failed to load data from API:', err);
+      } finally {
+        setIsLoadingData(false);
+      }
+    }
+    loadData();
+  }, []);
+
+  // --- PERSIST HELPERS (fire-and-forget API calls to keep DB in sync) ---
+  const persistActivity = async (id: number, data: any) => {
+    try { await api(`/api/activities/${id}`, { method: 'PUT', body: JSON.stringify(data) }); } catch (e) { console.error('Persist activity failed:', e); }
+  };
+
+  const persistDeleteActivities = async (ids: number[]) => {
+    try { await api('/api/activities', { method: 'DELETE', body: JSON.stringify({ ids }) }); } catch (e) { console.error('Delete activities failed:', e); }
+  };
+
+  const persistBulkUpdateActivities = async (ids: number[], data: any) => {
+    try { await api('/api/activities/bulk-update', { method: 'PUT', body: JSON.stringify({ ids, data }) }); } catch (e) { console.error('Bulk update failed:', e); }
+  };
+
+  const persistCreateBilledEntry = async (entry: any, activityIdsToRemove: number[]) => {
+    try {
+      const result = await api('/api/billed-entries', { method: 'POST', body: JSON.stringify({ entry, activityIdsToRemove }) });
+      return result;
+    } catch (e) { console.error('Create billed entry failed:', e); return null; }
+  };
+
+  const persistSmartRules = async (rules: any[]) => {
+    try { await api('/api/smart-rules', { method: 'PUT', body: JSON.stringify(rules.map(r => ({ matterId: r.matterId, triggers: r.triggers }))) }); } catch (e) { console.error('Persist rules failed:', e); }
+  };
+
+  const persistSettings = async (data: any) => {
+    try { await api('/api/settings', { method: 'PUT', body: JSON.stringify(data) }); } catch (e) { console.error('Persist settings failed:', e); }
+  };
+
+  // --- GMAIL SYNC ---
+  const handleGmailConnect = async () => {
+    try {
+      const { url } = await api('/api/gmail/auth');
+      window.location.href = url;
+    } catch (err: any) {
+      showNotification(err.message || 'Failed to start Gmail auth');
+    }
+  };
+
+  const handleGmailDisconnect = async () => {
+    try {
+      await api('/api/gmail/disconnect', { method: 'POST' });
+      setGmailStatus({ connected: false, email: null, lastSynced: null });
+      showNotification('Gmail disconnected.');
+    } catch (err) {
+      showNotification('Failed to disconnect Gmail.');
+    }
+  };
+
+  const handleGmailSync = async () => {
+    setIsSyncing(true);
+    try {
+      const result = await api('/api/gmail/sync', { method: 'POST' });
+      // Reload activities from API to get the new ones
+      const freshActivities = await api('/api/activities');
+      setActivities(freshActivities);
+      const status = await api('/api/gmail/status');
+      setGmailStatus(status);
+      showNotification(`Gmail sync: ${result.inserted} new emails imported, ${result.skipped} duplicates skipped.`);
+    } catch (err: any) {
+      showNotification(err.message || 'Gmail sync failed.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Check for gmail=connected URL param on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('gmail') === 'connected') {
+      showNotification('Gmail connected successfully!');
+      api('/api/gmail/status').then(setGmailStatus).catch(() => {});
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   // --- DASHBOARD METRICS ---
   const getDashboardStats = useMemo(() => {
@@ -618,7 +597,11 @@ export function App() {
     }
 
     if (newActivities.length > 0) {
-        setActivities(prev => [...newActivities, ...prev]);
+        // Persist to API, then reload from DB to get real IDs
+        api('/api/activities', { method: 'POST', body: JSON.stringify(newActivities) })
+          .then(() => api('/api/activities'))
+          .then(fresh => setActivities(fresh))
+          .catch(() => setActivities(prev => [...newActivities, ...prev]));
         showNotification(`Imported ${newActivities.length} items (Applied Smart Rules).`);
     } else {
         showNotification("No valid items found to import.");
@@ -716,12 +699,28 @@ export function App() {
     const prevBilled = [...billedEntries];
     const prevActivities = [...activities];
 
+    // Persist to API
+    const dbEntry = {
+      date: newEntry.date,
+      description: newEntry.description,
+      matterId: newEntry.matterId,
+      qty: newEntry.qty,
+      value: newEntry.value,
+      itemCount: newEntry.itemCount,
+      user: newEntry.user,
+      originalItems: flatItems,
+    };
+    persistCreateBilledEntry(dbEntry, Array.from(allRawIdsToRemove) as number[])
+      .then(() => Promise.all([api('/api/billed-entries'), api('/api/activities')]))
+      .then(([freshBilled, freshActivities]) => { setBilledEntries(freshBilled); setActivities(freshActivities); })
+      .catch(() => {});
+
     setBilledEntries([newEntry, ...billedEntries]);
     setActivities(activities.filter(a => !allRawIdsToRemove.has(a.id)));
     setSelectedIds(new Set());
     setBulkNarrative('');
     setViewMode('BILLED');
-    
+
     pushToHistory('Bulk Entry Created', () => {
         setBilledEntries(prevBilled);
         setActivities(prevActivities);
@@ -746,7 +745,8 @@ export function App() {
     });
 
     setActivities(prev => prev.filter(a => !idsToDelete.has(a.id)));
-    
+    persistDeleteActivities(Array.from(idsToDelete) as number[]);
+
     pushToHistory(`Deleted ${idsToDelete.size} items`, () => {
         setActivities(prevActivities);
     });
@@ -784,6 +784,11 @@ export function App() {
   const handleRestoreEntry = (entry: any) => {
     setActivities([...activities, ...entry.originalItems]);
     setBilledEntries(billedEntries.filter(e => e.id !== entry.id));
+    // Persist: delete billed entry and restore activities
+    api(`/api/billed-entries/${entry.id}`, { method: 'DELETE', body: JSON.stringify({ restoreActivities: true }) })
+      .then(() => Promise.all([api('/api/activities'), api('/api/billed-entries')]))
+      .then(([freshAct, freshBilled]) => { setActivities(freshAct); setBilledEntries(freshBilled); })
+      .catch(() => {});
     showNotification("Entry unbilled. Items returned to dashboard.");
   };
 
@@ -875,17 +880,23 @@ export function App() {
       }
 
       if (ruleForm.id) {
-          setSmartRules(prev => prev.map(r => r.id === ruleForm.id ? { ...r, matterId: ruleForm.matterId, triggers: finalTriggers } : r));
+          const updated = smartRules.map(r => r.id === ruleForm.id ? { ...r, matterId: ruleForm.matterId, triggers: finalTriggers } : r);
+          setSmartRules(updated);
+          persistSmartRules(updated);
       } else {
-          setSmartRules(prev => [...prev, { id: Date.now(), matterId: ruleForm.matterId, triggers: finalTriggers }]);
+          const updated = [...smartRules, { id: Date.now(), matterId: ruleForm.matterId, triggers: finalTriggers }];
+          setSmartRules(updated);
+          persistSmartRules(updated);
       }
-      
+
       setIsRuleModalOpen(false);
       showNotification("Smart Rule saved successfully.");
   };
 
   const deleteRule = (id: number) => {
-      setSmartRules(prev => prev.filter(r => r.id !== id));
+      const updated = smartRules.filter(r => r.id !== id);
+      setSmartRules(updated);
+      persistSmartRules(updated);
   };
 
   // --- CAST OF CHARACTERS HANDLERS ---
@@ -932,7 +943,7 @@ export function App() {
   };
 
   // --- APPLYING MAPPINGS ---
-  const applySavedMappings = () => {
+  const applySavedMappings = async () => {
       let count = 0;
       const prevActivities = [...activities];
       const newActivities = activities.map(item => {
@@ -943,9 +954,14 @@ export function App() {
           }
           return item;
       });
-      
+
       if (count > 0) {
           setActivities(newActivities);
+          // Also run server-side matching for DB persistence
+          api('/api/apply-smart-rules', { method: 'POST' })
+            .then(() => api('/api/activities'))
+            .then(fresh => setActivities(fresh))
+            .catch(() => {});
           pushToHistory(`Applied Mappings (${count} items)`, () => {
               setActivities(prevActivities);
           });
@@ -1099,10 +1115,11 @@ export function App() {
           }
       });
 
-      const newActivities = activities.map(a => 
+      const newActivities = activities.map(a =>
           idsToUpdate.has(a.id) ? { ...a, matterId: bulkMatterInput } : a
       );
       setActivities(newActivities);
+      persistBulkUpdateActivities(Array.from(idsToUpdate) as number[], { matterId: bulkMatterInput });
 
       // 2. Update Smart Rules
       const selectedTriggers = bulkTriggers.filter(t => t.selected).map(t => t.value);
@@ -1129,7 +1146,10 @@ export function App() {
       } else {
           showNotification(`Updated ${idsToUpdate.size} items to matter "${bulkMatterInput}".`);
       }
-      
+
+      // Persist rules
+      setTimeout(() => persistSmartRules(smartRules), 100);
+
       pushToHistory('Bulk Update', () => {
           setActivities(prevActivities);
           setSmartRules(prevRules);
@@ -1280,9 +1300,15 @@ export function App() {
               }
           });
           setSmartRules(newRulesList);
+          persistSmartRules(newRulesList);
           showNotification(`Assigned ${updates.size} items and updated rules for ${updatedCount} matters.`);
       } else {
           showNotification(`Successfully assigned ${updates.size} items.`);
+      }
+
+      // Persist activity updates
+      for (const [id, matter] of updates.entries()) {
+        persistActivity(id, { matterId: matter });
       }
 
       pushToHistory('Auto-Assignment', () => {
@@ -1396,17 +1422,17 @@ export function App() {
     const item = viewActivities.find(i => i.id === id);
     if (item && item.originalIds) {
         setActivities(activities.map(a => item.originalIds.includes(a.id) ? { ...a, matterId: newMatterId } : a));
+        persistBulkUpdateActivities(item.originalIds, { matterId: newMatterId });
     } else {
         setActivities(activities.map(a => a.id === id ? { ...a, matterId: newMatterId } : a));
+        persistActivity(id, { matterId: newMatterId });
     }
-    // Only push to history if it's a direct action (debounce this in real app, simplified here)
-    // For simplicity, we won't push every keystroke to history in this demo, but ideally onBlur.
   };
 
   const handleDurationChange = (id: number, newDuration: string) => {
-    // FIX: Using Number() to check for NaN correctly in TypeScript for a string input
     if (isNaN(Number(newDuration)) && newDuration !== '' && newDuration !== '.') return;
     setActivities(activities.map(item => item.id === id ? { ...item, duration: newDuration } : item));
+    persistActivity(id, { duration: newDuration });
   };
 
   const toggleSelection = (id: number) => {
@@ -2079,10 +2105,11 @@ export function App() {
                 <Settings size={18} /> <span className="font-medium text-sm">Billing Settings</span>
              </div>
              <div className="pt-3 border-t border-slate-800 text-[10px] text-slate-600 flex justify-between items-center">
-                <div className="flex items-center gap-1.5 text-emerald-500/80">
-                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div> <span className="font-medium">Live Sync Active</span>
+                <div className={`flex items-center gap-1.5 ${gmailStatus.connected ? 'text-emerald-500/80' : 'text-slate-500'}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${gmailStatus.connected ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`}></div>
+                    <span className="font-medium">{gmailStatus.connected ? 'Gmail Connected' : 'No Sync'}</span>
                 </div>
-                <span>v1.2.0</span>
+                <span>v2.0.0</span>
              </div>
         </div>
       </div>
@@ -2136,6 +2163,11 @@ export function App() {
                     </button>
                 )}
 
+                {gmailStatus.connected && (
+                    <button onClick={handleGmailSync} disabled={isSyncing} className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-3.5 py-2 rounded-lg shadow-sm font-semibold text-xs transition-colors">
+                        {isSyncing ? <Loader2 size={14} className="animate-spin"/> : <RefreshCw size={14} />} {isSyncing ? 'Syncing...' : 'Sync Gmail'}
+                    </button>
+                )}
                 <button onClick={handleImportClick} className="flex items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white border border-transparent px-3.5 py-2 rounded-lg shadow-sm font-semibold text-xs transition-colors">
                     <Upload size={14} /> Import CSV
                 </button>
@@ -2364,11 +2396,17 @@ export function App() {
                         >
                             <UserCog size={16}/> Cast & Context
                         </button>
-                        <button 
+                        <button
                             onClick={() => setSettingsTab('AI')}
                             className={`px-6 py-4 text-sm font-semibold flex items-center gap-2 transition-colors ${settingsTab === 'AI' ? 'bg-white text-indigo-600 border-t-2 border-t-indigo-600 border-x border-x-gray-200 -mb-px shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'}`}
                         >
                             <Cpu size={16}/> AI & API Configuration
+                        </button>
+                        <button
+                            onClick={() => setSettingsTab('GMAIL')}
+                            className={`px-6 py-4 text-sm font-semibold flex items-center gap-2 transition-colors ${settingsTab === 'GMAIL' ? 'bg-white text-red-600 border-t-2 border-t-red-600 border-x border-x-gray-200 -mb-px shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100/50'}`}
+                        >
+                            <ExternalLink size={16}/> Gmail Integration
                         </button>
                     </div>
 
@@ -2544,10 +2582,74 @@ export function App() {
                             </div>
                         </div>
                     )}
+
+                    {/* TAB: GMAIL INTEGRATION */}
+                    {settingsTab === 'GMAIL' && (
+                        <div className="animate-in fade-in duration-300">
+                            <h2 className="text-xl font-bold text-gray-900 mb-2">Gmail Integration</h2>
+                            <p className="text-gray-500 text-sm mb-8 pb-4 border-b border-gray-100">Connect your Gmail inbox to automatically import emails as billable activities.</p>
+
+                            <div className="mb-8 p-6 bg-white rounded-xl border border-gray-200 shadow-sm">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${gmailStatus.connected ? 'bg-green-100' : 'bg-gray-100'}`}>
+                                            <ExternalLink size={24} className={gmailStatus.connected ? 'text-green-600' : 'text-gray-400'} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-gray-900">{gmailStatus.connected ? 'Gmail Connected' : 'Gmail Not Connected'}</h3>
+                                            {gmailStatus.connected ? (
+                                                <p className="text-sm text-gray-500">{gmailStatus.email} &bull; Last synced: {gmailStatus.lastSynced ? new Date(gmailStatus.lastSynced).toLocaleString() : 'Never'}</p>
+                                            ) : (
+                                                <p className="text-sm text-gray-500">Connect your Gmail to start importing emails automatically.</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3">
+                                        {gmailStatus.connected ? (
+                                            <>
+                                                <button onClick={handleGmailSync} disabled={isSyncing} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-lg font-semibold text-xs transition-colors shadow-sm">
+                                                    {isSyncing ? <Loader2 size={14} className="animate-spin"/> : <RefreshCw size={14} />} {isSyncing ? 'Syncing...' : 'Sync Now'}
+                                                </button>
+                                                <button onClick={handleGmailDisconnect} className="flex items-center gap-2 bg-white hover:bg-red-50 text-red-600 border border-red-200 px-4 py-2.5 rounded-lg font-semibold text-xs transition-colors">
+                                                    <Trash2 size={14} /> Disconnect
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button onClick={handleGmailConnect} className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold text-xs transition-colors shadow-sm">
+                                                <ExternalLink size={14} /> Connect Gmail
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-5 bg-amber-50 rounded-xl border border-amber-200">
+                                <div className="flex gap-3">
+                                    <AlertTriangle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+                                    <div>
+                                        <h4 className="font-bold text-amber-800 text-sm mb-1">Setup Required</h4>
+                                        <p className="text-xs text-amber-700 leading-relaxed">Gmail integration requires Google OAuth credentials. Set <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono">GOOGLE_CLIENT_ID</code> and <code className="bg-amber-100 px-1.5 py-0.5 rounded font-mono">GOOGLE_CLIENT_SECRET</code> environment variables on your server. You can obtain these from the <span className="font-semibold">Google Cloud Console</span> by creating an OAuth 2.0 Client ID.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     </div>
 
                     <div className="px-8 pb-8 flex justify-end">
-                        <button onClick={() => { setViewMode('ALL'); setSelectedMatterId('ALL'); }} className="bg-gray-900 hover:bg-black text-white px-8 py-3 rounded-lg text-sm font-bold shadow-lg shadow-gray-900/10 flex items-center gap-2 transition-all transform hover:-translate-y-0.5">
+                        <button onClick={() => {
+                            // Persist settings to API
+                            persistSettings({
+                              inboundRate: settings.inboundRate,
+                              outboundRate: settings.outboundRate,
+                              eventRate: settings.eventRate,
+                              hourlyRate: settings.hourlyRate,
+                              narrativePrompt: settings.narrativePrompt,
+                              geminiApiKey: settings.apiKey,
+                            });
+                            setViewMode('ALL'); setSelectedMatterId('ALL');
+                            showNotification('Settings saved.');
+                        }} className="bg-gray-900 hover:bg-black text-white px-8 py-3 rounded-lg text-sm font-bold shadow-lg shadow-gray-900/10 flex items-center gap-2 transition-all transform hover:-translate-y-0.5">
                             <Save size={16} /> Save Settings & Close
                         </button>
                     </div>
